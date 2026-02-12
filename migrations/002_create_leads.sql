@@ -10,6 +10,7 @@ CREATE TABLE leads (
     phone_type TEXT,
     phone_connected BOOLEAN,
     phone_dnc BOOLEAN,
+    phone_owner_match BOOLEAN,
     alt_phones JSONB,
     email TEXT,
     alt_emails JSONB,

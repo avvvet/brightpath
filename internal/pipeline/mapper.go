@@ -86,6 +86,14 @@ func MapPropertyDetailToProperty(detail *reapi.PropertyDetailResponse) (*domain.
 		return &i
 	}
 
+	// Helper to get float64 pointer
+	float64Ptr := func(f float64) *float64 {
+		if f == 0 {
+			return nil
+		}
+		return &f
+	}
+
 	// Helper to get bool pointer
 	boolPtr := func(b bool) *bool {
 		return &b
@@ -107,7 +115,7 @@ func MapPropertyDetailToProperty(detail *reapi.PropertyDetailResponse) (*domain.
 		// Property details
 		PropertyType: strPtr(data.PropertyType),
 		Bedrooms:     intPtr(data.PropertyInfo.Bedrooms),
-		Bathrooms:    intPtr(data.PropertyInfo.Bathrooms),
+		Bathrooms:    float64Ptr(data.PropertyInfo.Bathrooms),
 		Sqft:         intPtr(data.PropertyInfo.LivingSquareFeet),
 		YearBuilt:    intPtr(data.PropertyInfo.YearBuilt),
 
@@ -171,24 +179,31 @@ func MapPropertyDetailToProperty(detail *reapi.PropertyDetailResponse) (*domain.
 
 // MapSkipTraceToLead converts REAPI SkipTrace response to domain.Lead
 // Returns nil if no valid mobile phone found
+// Strategy: Try owner first, then fallback to any valid mobile (relative/co-owner)
 func MapSkipTraceToLead(propertyID uuid.UUID, ownerFirstName, ownerLastName string, skipTrace *reapi.SkipTraceResponse, daysToAuction int) (*domain.Lead, error) {
 	if !skipTrace.Match {
 		return nil, nil
 	}
 
-	// Find the owner's phone by matching name
 	var primaryPhone *reapi.Phone
+	var matchedPersonID string
+	var isOwnerMatch bool = false
+
+	// First pass: Try to match owner by name
 	for _, phone := range skipTrace.Output.Identity.Phones {
-		// Match by personId to name
+		// Apply phone filters first
+		if phone.PhoneType != "mobile" || !phone.IsConnected || phone.DoNotCall {
+			continue
+		}
+
+		// Check if this phone belongs to the owner
 		for _, name := range skipTrace.Output.Identity.Names {
 			if name.PersonID == phone.PersonID {
-				// Check if name matches owner
 				if name.FirstName == ownerFirstName && name.LastName == ownerLastName {
-					// Apply filters: mobile, connected, not DNC
-					if phone.PhoneType == "mobile" && phone.IsConnected && !phone.DoNotCall {
-						primaryPhone = &phone
-						break
-					}
+					primaryPhone = &phone
+					matchedPersonID = phone.PersonID
+					isOwnerMatch = true
+					break
 				}
 			}
 		}
@@ -197,28 +212,33 @@ func MapSkipTraceToLead(propertyID uuid.UUID, ownerFirstName, ownerLastName stri
 		}
 	}
 
-	// If no valid phone found, return nil (don't create lead)
+	// Second pass: If no owner phone found, take ANY valid mobile at the address (relative/co-owner)
+	if primaryPhone == nil {
+		for _, phone := range skipTrace.Output.Identity.Phones {
+			if phone.PhoneType == "mobile" && phone.IsConnected && !phone.DoNotCall {
+				primaryPhone = &phone
+				matchedPersonID = phone.PersonID
+				isOwnerMatch = false // This is a relative/co-owner, not the exact owner
+				break
+			}
+		}
+	}
+
+	// If still no valid phone found, return nil (don't create lead)
 	if primaryPhone == nil {
 		return nil, nil
 	}
 
-	// Find primary email (if any)
+	// Find primary email for matched person
 	var primaryEmail *string
 	for _, email := range skipTrace.Output.Identity.Emails {
-		for _, name := range skipTrace.Output.Identity.Names {
-			if name.PersonID == email.PersonID {
-				if name.FirstName == ownerFirstName && name.LastName == ownerLastName {
-					primaryEmail = &email.Email
-					break
-				}
-			}
-		}
-		if primaryEmail != nil {
+		if email.PersonID == matchedPersonID {
+			primaryEmail = &email.Email
 			break
 		}
 	}
 
-	// Marshal alt phones to JSON
+	// Marshal alt phones to JSON (all phones from skip trace for reference)
 	var altPhones *string
 	if len(skipTrace.Output.Identity.Phones) > 1 {
 		altPhonesData, err := json.Marshal(skipTrace.Output.Identity.Phones)
@@ -238,7 +258,18 @@ func MapSkipTraceToLead(propertyID uuid.UUID, ownerFirstName, ownerLastName stri
 		}
 	}
 
-	// Helper to get string pointer
+	// Find demographics for matched person
+	var ownerAge *int
+	var ownerGender *string
+	if skipTrace.Output.Demographics.Age > 0 {
+		age := skipTrace.Output.Demographics.Age
+		ownerAge = &age
+	}
+	if skipTrace.Output.Demographics.Gender != "" {
+		ownerGender = &skipTrace.Output.Demographics.Gender
+	}
+
+	// Helper functions
 	strPtr := func(s string) *string {
 		if s == "" {
 			return nil
@@ -246,15 +277,6 @@ func MapSkipTraceToLead(propertyID uuid.UUID, ownerFirstName, ownerLastName stri
 		return &s
 	}
 
-	// Helper to get int pointer
-	intPtr := func(i int) *int {
-		if i == 0 {
-			return nil
-		}
-		return &i
-	}
-
-	// Helper to get bool pointer
 	boolPtr := func(b bool) *bool {
 		return &b
 	}
@@ -263,21 +285,22 @@ func MapSkipTraceToLead(propertyID uuid.UUID, ownerFirstName, ownerLastName stri
 		PropertyID: propertyID,
 		Status:     "new",
 
-		// Contact
-		Phone:          strPtr(primaryPhone.Phone),
-		PhoneType:      strPtr(primaryPhone.PhoneType),
-		PhoneConnected: boolPtr(primaryPhone.IsConnected),
-		PhoneDNC:       boolPtr(primaryPhone.DoNotCall),
-		AltPhones:      altPhones,
-		Email:          primaryEmail,
-		AltEmails:      altEmails,
+		// Contact (might be relative's phone if owner phone not found)
+		Phone:           strPtr(primaryPhone.Phone),
+		PhoneType:       strPtr(primaryPhone.PhoneType),
+		PhoneConnected:  boolPtr(primaryPhone.IsConnected),
+		PhoneDNC:        boolPtr(primaryPhone.DoNotCall),
+		PhoneOwnerMatch: boolPtr(isOwnerMatch),
+		AltPhones:       altPhones,
+		Email:           primaryEmail,
+		AltEmails:       altEmails,
 
 		// Demographics
-		OwnerAge:    intPtr(skipTrace.Output.Demographics.Age),
-		OwnerGender: strPtr(skipTrace.Output.Demographics.Gender),
+		OwnerAge:    ownerAge,
+		OwnerGender: ownerGender,
 
 		// Scoring
-		DaysToAuction: intPtr(daysToAuction),
+		DaysToAuction: &daysToAuction,
 	}
 
 	return lead, nil

@@ -65,22 +65,22 @@ func (p *Pipeline) Run() error {
 	run.IDsFound = len(propertyIDs)
 	log.Printf("[%s] Found %d property IDs", p.state, run.IDsFound)
 
-	// Step 2: Enrich NEW properties only (1 credit each)
-	log.Printf("[%s] Step 2: Enriching new properties", p.state)
+	// Step 2: Enrich NEW properties AND load existing qualified properties
+	log.Printf("[%s] Step 2: Enriching new properties and loading existing qualified properties", p.state)
 
-	newProperties, err := p.enrichNewProperties(propertyIDs, run)
+	qualifiedProperties, err := p.enrichAndLoadProperties(propertyIDs, run)
 	if err != nil {
 		errMsg := fmt.Sprintf("enrichment failed: %v", err)
 		_ = p.store.CompletePipelineRun(run.ID, "failed", &errMsg)
 		return fmt.Errorf("enrichment failed: %w", err)
 	}
 
-	log.Printf("[%s] Enriched %d new properties, %d passed filters", p.state, run.PropertiesEnriched, run.PropertiesQualified)
+	log.Printf("[%s] Enriched %d new properties, %d total qualified for skip tracing", p.state, run.PropertiesEnriched, len(qualifiedProperties))
 
 	// Step 3: Skip trace qualified leads (1 credit each)
 	log.Printf("[%s] Step 3: Skip tracing qualified leads", p.state)
 
-	err = p.skipTraceQualifiedLeads(newProperties, run)
+	err = p.skipTraceQualifiedLeads(qualifiedProperties, run)
 	if err != nil {
 		errMsg := fmt.Sprintf("skip trace failed: %v", err)
 		_ = p.store.CompletePipelineRun(run.ID, "failed", &errMsg)
@@ -107,8 +107,9 @@ func (p *Pipeline) Run() error {
 	return nil
 }
 
-// enrichNewProperties fetches PropertyDetail for new IDs only (credit guard)
-func (p *Pipeline) enrichNewProperties(propertyIDs []int64, run *domain.PipelineRun) ([]*domain.Property, error) {
+// enrichAndLoadProperties fetches PropertyDetail for new IDs AND loads existing qualified properties
+// This ensures we can resume skip tracing for properties that were enriched but not skip traced
+func (p *Pipeline) enrichAndLoadProperties(propertyIDs []int64, run *domain.PipelineRun) ([]*domain.Property, error) {
 	var qualifiedProperties []*domain.Property
 
 	for _, id := range propertyIDs {
@@ -120,50 +121,57 @@ func (p *Pipeline) enrichNewProperties(propertyIDs []int64, run *domain.Pipeline
 			return nil, fmt.Errorf("failed to check property existence for ID %d: %w", id, err)
 		}
 
+		var property *domain.Property
+
 		if exists {
-			// Already in DB, skip (saves 1 credit)
-			continue
-		}
-
-		// Property is NEW - fetch detail (costs 1 credit)
-		run.IDsNew++
-
-		detail, err := p.reapi.GetPropertyDetail(id)
-		if err != nil {
-			log.Printf("[%s] Warning: failed to get property detail for ID %d: %v", p.state, id, err)
-			continue // Log and continue, don't crash the batch
-		}
-
-		run.CreditsUsedProperty++
-		run.PropertiesEnriched++
-
-		// Map to domain property
-		property, err := MapPropertyDetailToProperty(detail)
-		if err != nil {
-			log.Printf("[%s] Warning: failed to map property ID %d: %v", p.state, id, err)
-			continue
-		}
-
-		// Apply Go post-filters (no API cost)
-		if !PassesAllFilters(property) {
-			// Save to DB but don't qualify for skip trace
-			if err := p.store.UpsertProperty(property); err != nil {
-				log.Printf("[%s] Warning: failed to save filtered property ID %d: %v", p.state, id, err)
+			// Property already in DB - LOAD IT instead of skipping
+			property, err = p.store.GetPropertyBySourceID("reapi", sourceID)
+			if err != nil {
+				log.Printf("[%s] Warning: failed to load existing property ID %d: %v", p.state, id, err)
+				continue
 			}
+
+			// Don't count as "new" or "enriched" (already done)
+			// But DO check if it qualifies for skip tracing
+		} else {
+			// Property is NEW - fetch detail (costs 1 credit)
+			run.IDsNew++
+
+			detail, err := p.reapi.GetPropertyDetail(id)
+			if err != nil {
+				log.Printf("[%s] Warning: failed to get property detail for ID %d: %v", p.state, id, err)
+				continue
+			}
+
+			run.CreditsUsedProperty++
+			run.PropertiesEnriched++
+
+			// Map to domain property
+			property, err = MapPropertyDetailToProperty(detail)
+			if err != nil {
+				log.Printf("[%s] Warning: failed to map property ID %d: %v", p.state, id, err)
+				continue
+			}
+
+			// Save new property to DB
+			if err := p.store.UpsertProperty(property); err != nil {
+				log.Printf("[%s] Warning: failed to save property ID %d: %v", p.state, id, err)
+				continue
+			}
+		}
+
+		// Apply Go post-filters (no API cost) - applies to BOTH new and existing
+		if !PassesAllFilters(property) {
+			// Property doesn't qualify, skip
 			continue
 		}
 
-		// Property passed all filters - save and mark as qualified
-		if err := p.store.UpsertProperty(property); err != nil {
-			log.Printf("[%s] Warning: failed to save property ID %d: %v", p.state, id, err)
-			continue
-		}
-
+		// Property passed all filters - add to qualified list
 		run.PropertiesQualified++
 		qualifiedProperties = append(qualifiedProperties, property)
 
 		// Update run stats periodically (every 10 properties)
-		if run.PropertiesEnriched%10 == 0 {
+		if run.PropertiesQualified%10 == 0 {
 			if err := p.store.UpdatePipelineRun(run); err != nil {
 				log.Printf("[%s] Warning: failed to update pipeline run: %v", p.state, err)
 			}

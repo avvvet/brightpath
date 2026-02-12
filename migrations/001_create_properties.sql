@@ -16,7 +16,7 @@ CREATE TABLE properties (
     -- property details (from propertyInfo)
     property_type TEXT,
     bedrooms INT,
-    bathrooms INT,
+    bathrooms NUMERIC(4,1),
     sqft INT,
     year_built INT,
     lot_sqft INT,

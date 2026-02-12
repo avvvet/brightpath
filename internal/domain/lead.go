@@ -14,13 +14,14 @@ type Lead struct {
 	Status string `db:"status"`
 
 	// Contact (from skip trace)
-	Phone          *string `db:"phone"`
-	PhoneType      *string `db:"phone_type"`
-	PhoneConnected *bool   `db:"phone_connected"`
-	PhoneDNC       *bool   `db:"phone_dnc"`
-	AltPhones      *string `db:"alt_phones"` // JSONB stored as string
-	Email          *string `db:"email"`
-	AltEmails      *string `db:"alt_emails"` // JSONB stored as string
+	Phone           *string `db:"phone"`
+	PhoneType       *string `db:"phone_type"`
+	PhoneConnected  *bool   `db:"phone_connected"`
+	PhoneDNC        *bool   `db:"phone_dnc"`
+	PhoneOwnerMatch *bool   `db:"phone_owner_match"`
+	AltPhones       *string `db:"alt_phones"` // JSONB stored as string
+	Email           *string `db:"email"`
+	AltEmails       *string `db:"alt_emails"` // JSONB stored as string
 
 	// Demographics (from skip trace)
 	OwnerAge    *int    `db:"owner_age"`

@@ -1,3 +1,4 @@
+
 CREATE TABLE pipeline_runs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     state TEXT NOT NULL,
@@ -16,5 +17,8 @@ CREATE TABLE pipeline_runs (
     credits_used_skiptrace INT DEFAULT 0,
 
     error TEXT,
-    config JSONB
+    config JSONB,
+    
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );

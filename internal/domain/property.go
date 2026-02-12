@@ -22,12 +22,12 @@ type Property struct {
 	Location *string `db:"location"` // PostGIS GEOGRAPHY stored as string
 
 	// Property details (from propertyInfo)
-	PropertyType *string `db:"property_type"`
-	Bedrooms     *int    `db:"bedrooms"`
-	Bathrooms    *int    `db:"bathrooms"`
-	Sqft         *int    `db:"sqft"`
-	YearBuilt    *int    `db:"year_built"`
-	LotSqft      *int    `db:"lot_sqft"`
+	PropertyType *string  `db:"property_type"`
+	Bedrooms     *int     `db:"bedrooms"`
+	Bathrooms    *float64 `db:"bathrooms"`
+	Sqft         *int     `db:"sqft"`
+	YearBuilt    *int     `db:"year_built"`
+	LotSqft      *int     `db:"lot_sqft"`
 
 	// Valuation
 	AVM           *int `db:"avm"`

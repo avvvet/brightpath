@@ -25,7 +25,7 @@ func (db *DB) GetLeadByPropertyID(propertyID uuid.UUID) (*domain.Lead, error) {
 	var lead domain.Lead
 	query := `
 		SELECT id, property_id, status,
-		       phone, phone_type, phone_connected, phone_dnc, alt_phones,
+		       phone, phone_type, phone_connected, phone_dnc, phone_owner_match, alt_phones,
 		       email, alt_emails,
 		       owner_age, owner_gender,
 		       lead_score, score_reasons, days_to_auction,
@@ -36,7 +36,7 @@ func (db *DB) GetLeadByPropertyID(propertyID uuid.UUID) (*domain.Lead, error) {
 	`
 	err := db.conn.QueryRow(query, propertyID).Scan(
 		&lead.ID, &lead.PropertyID, &lead.Status,
-		&lead.Phone, &lead.PhoneType, &lead.PhoneConnected, &lead.PhoneDNC, &lead.AltPhones,
+		&lead.Phone, &lead.PhoneType, &lead.PhoneConnected, &lead.PhoneDNC, &lead.PhoneOwnerMatch, &lead.AltPhones,
 		&lead.Email, &lead.AltEmails,
 		&lead.OwnerAge, &lead.OwnerGender,
 		&lead.LeadScore, &lead.ScoreReasons, &lead.DaysToAuction,
@@ -57,7 +57,7 @@ func (db *DB) GetLeadByID(id uuid.UUID) (*domain.Lead, error) {
 	var lead domain.Lead
 	query := `
 		SELECT id, property_id, status,
-		       phone, phone_type, phone_connected, phone_dnc, alt_phones,
+		       phone, phone_type, phone_connected, phone_dnc, phone_owner_match, alt_phones,
 		       email, alt_emails,
 		       owner_age, owner_gender,
 		       lead_score, score_reasons, days_to_auction,
@@ -68,7 +68,7 @@ func (db *DB) GetLeadByID(id uuid.UUID) (*domain.Lead, error) {
 	`
 	err := db.conn.QueryRow(query, id).Scan(
 		&lead.ID, &lead.PropertyID, &lead.Status,
-		&lead.Phone, &lead.PhoneType, &lead.PhoneConnected, &lead.PhoneDNC, &lead.AltPhones,
+		&lead.Phone, &lead.PhoneType, &lead.PhoneConnected, &lead.PhoneDNC, &lead.PhoneOwnerMatch, &lead.AltPhones,
 		&lead.Email, &lead.AltEmails,
 		&lead.OwnerAge, &lead.OwnerGender,
 		&lead.LeadScore, &lead.ScoreReasons, &lead.DaysToAuction,
@@ -89,18 +89,18 @@ func (db *DB) CreateLead(lead *domain.Lead) error {
 	query := `
 		INSERT INTO leads (
 			property_id, status,
-			phone, phone_type, phone_connected, phone_dnc, alt_phones,
+			phone, phone_type, phone_connected, phone_dnc, phone_owner_match, alt_phones,
 			email, alt_emails,
 			owner_age, owner_gender,
 			lead_score, score_reasons, days_to_auction,
 			closer_id, forwarded_at
 		) VALUES (
 			$1, $2,
-			$3, $4, $5, $6, $7,
-			$8, $9,
-			$10, $11,
-			$12, $13, $14,
-			$15, $16
+			$3, $4, $5, $6, $7, $8,
+			$9, $10,
+			$11, $12,
+			$13, $14, $15,
+			$16, $17
 		)
 		RETURNING id, created_at, updated_at
 	`
@@ -108,7 +108,7 @@ func (db *DB) CreateLead(lead *domain.Lead) error {
 	err := db.conn.QueryRow(
 		query,
 		lead.PropertyID, lead.Status,
-		lead.Phone, lead.PhoneType, lead.PhoneConnected, lead.PhoneDNC, lead.AltPhones,
+		lead.Phone, lead.PhoneType, lead.PhoneConnected, lead.PhoneDNC, lead.PhoneOwnerMatch, lead.AltPhones,
 		lead.Email, lead.AltEmails,
 		lead.OwnerAge, lead.OwnerGender,
 		lead.LeadScore, lead.ScoreReasons, lead.DaysToAuction,
@@ -136,7 +136,7 @@ func (db *DB) UpdateLeadStatus(id uuid.UUID, status string) error {
 func (db *DB) GetLeadsByStatus(status string, limit int) ([]*domain.Lead, error) {
 	query := `
 		SELECT id, property_id, status,
-		       phone, phone_type, phone_connected, phone_dnc, alt_phones,
+		       phone, phone_type, phone_connected, phone_dnc, phone_owner_match, alt_phones,
 		       email, alt_emails,
 		       owner_age, owner_gender,
 		       lead_score, score_reasons, days_to_auction,
@@ -159,7 +159,7 @@ func (db *DB) GetLeadsByStatus(status string, limit int) ([]*domain.Lead, error)
 		var lead domain.Lead
 		err := rows.Scan(
 			&lead.ID, &lead.PropertyID, &lead.Status,
-			&lead.Phone, &lead.PhoneType, &lead.PhoneConnected, &lead.PhoneDNC, &lead.AltPhones,
+			&lead.Phone, &lead.PhoneType, &lead.PhoneConnected, &lead.PhoneDNC, &lead.PhoneOwnerMatch, &lead.AltPhones,
 			&lead.Email, &lead.AltEmails,
 			&lead.OwnerAge, &lead.OwnerGender,
 			&lead.LeadScore, &lead.ScoreReasons, &lead.DaysToAuction,

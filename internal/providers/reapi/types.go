@@ -1,9 +1,22 @@
 package reapi
 
-// SearchRequest for Property Search API (ids_only mode)
+// SearchRequest for Property Search API (ids_only mode) - first call
 type SearchRequest struct {
 	Size             int    `json:"size"`
-	Start            int    `json:"start,omitempty"`
+	State            string `json:"state"`
+	Auction          bool   `json:"auction"`
+	AuctionDateMin   string `json:"auction_date_min"`
+	AuctionDateMax   string `json:"auction_date_max"`
+	EquityPercentMin int    `json:"equity_percent_min"`
+	CorporateOwned   bool   `json:"corporate_owned"`
+	PropertyType     string `json:"property_type"`
+	IDsOnly          bool   `json:"ids_only"`
+}
+
+// SearchRequestWithStart for pagination (includes start field)
+type SearchRequestWithStart struct {
+	Size             int    `json:"size"`
+	Start            int    `json:"start"`
 	State            string `json:"state"`
 	Auction          bool   `json:"auction"`
 	AuctionDateMin   string `json:"auction_date_min"`
@@ -82,7 +95,7 @@ type MailAddress struct {
 type PropertyInfo struct {
 	Address          Address `json:"address"`
 	Bedrooms         int     `json:"bedrooms"`
-	Bathrooms        int     `json:"bathrooms"`
+	Bathrooms        float64 `json:"bathrooms"`
 	LivingSquareFeet int     `json:"livingSquareFeet"`
 	YearBuilt        int     `json:"yearBuilt"`
 	Latitude         float64 `json:"latitude"`
