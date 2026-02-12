@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/avvvet/brightpath/internal/config"
@@ -166,6 +167,16 @@ func (p *Pipeline) enrichAndLoadProperties(propertyIDs []int64, run *domain.Pipe
 			continue
 		}
 
+		// Check skip trace status - don't retry permanent failures
+		if property.SkipTraceStatus != nil {
+			status := *property.SkipTraceStatus
+			if status == "completed" || status == "no_match" || status == "no_phone" || status == "missing_data" {
+				// Already processed or permanent failure, skip
+				continue
+			}
+			// status == "pending" or "api_error" → allow retry
+		}
+
 		// Property passed all filters - add to qualified list
 		run.PropertiesQualified++
 		qualifiedProperties = append(qualifiedProperties, property)
@@ -200,6 +211,7 @@ func (p *Pipeline) skipTraceQualifiedLeads(properties []*domain.Property, run *d
 			prop.MailStreet == nil || prop.MailCity == nil ||
 			prop.MailState == nil || prop.MailZip == nil {
 			log.Printf("[%s] Warning: property %s missing required skip trace fields", p.state, prop.ID)
+			p.store.UpdatePropertySkipTraceStatus(prop.ID, "missing_data", "Missing required fields for skip trace")
 			continue
 		}
 
@@ -218,7 +230,20 @@ func (p *Pipeline) skipTraceQualifiedLeads(properties []*domain.Property, run *d
 
 		skipTraceResp, err := p.reapi.SkipTrace(skipTraceReq)
 		if err != nil {
-			log.Printf("[%s] Warning: skip trace failed for property %s: %v", p.state, prop.ID, err)
+			// Check error type
+			if strings.Contains(err.Error(), "status 404") {
+				// 404 = Person not found - PERMANENT failure
+				log.Printf("[%s] Property %s: Person not found in skip trace database (404)", p.state, prop.ID)
+				p.store.UpdatePropertySkipTraceStatus(prop.ID, "no_match", "Person not found (404)")
+			} else if strings.Contains(err.Error(), "status 429") {
+				// 429 = Rate limit - TEMPORARY failure, can retry
+				log.Printf("[%s] Property %s: Skip trace rate limit hit (429)", p.state, prop.ID)
+				p.store.UpdatePropertySkipTraceStatus(prop.ID, "api_error", "Rate limit exceeded (429)")
+			} else {
+				// Other API error - mark as temporary
+				log.Printf("[%s] Warning: skip trace failed for property %s: %v", p.state, prop.ID, err)
+				p.store.UpdatePropertySkipTraceStatus(prop.ID, "api_error", err.Error())
+			}
 			continue
 		}
 
@@ -238,15 +263,23 @@ func (p *Pipeline) skipTraceQualifiedLeads(properties []*domain.Property, run *d
 		}
 
 		if lead == nil {
-			// No valid phone found, skip lead creation
+			// No valid phone found - PERMANENT failure
+			log.Printf("[%s] Property %s: No valid mobile phone found", p.state, prop.ID)
+			p.store.UpdatePropertySkipTraceStatus(prop.ID, "no_phone", "No valid mobile phone found")
 			continue
 		}
 
 		// Create lead
 		if err := p.store.CreateLead(lead); err != nil {
 			log.Printf("[%s] Warning: failed to create lead for property %s: %v", p.state, prop.ID, err)
+			p.store.UpdatePropertySkipTraceStatus(prop.ID, "api_error", "Failed to create lead")
 			continue
 		}
+
+		// SUCCESS - mark as completed
+		p.store.UpdatePropertySkipTraceStatus(prop.ID, "completed", "")
+		run.LeadsCreated++
+		run.SkipTraceHits++
 
 		run.LeadsCreated++
 		run.SkipTraceHits++

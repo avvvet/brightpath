@@ -25,23 +25,25 @@ func (db *DB) GetPropertyBySourceID(source, sourceID string) (*domain.Property, 
 	var prop domain.Property
 	query := `
 		SELECT id, source, source_id, address, street, city, state, zip, county, fips,
-		       ST_AsText(location) as location,
-		       property_type, bedrooms, bathrooms, sqft, year_built, lot_sqft,
-		       avm, assessed_value,
-		       open_mortgage_balance, equity_amount, equity_percent, loan_type, lender_name,
-		       pre_foreclosure, auction, auction_date, auction_time, auction_location,
-		       notice_type, recording_date, foreclosure,
-		       bank_estimated_value, trustee_name, trustee_phone, foreclosure_document_type,
-		       owner1_first_name, owner1_last_name, owner1_full_name, owner1_type,
-		       owner2_first_name, owner2_last_name,
-		       owner_occupied, absentee_owner, investor_buyer, corporate_owned,
-		       ownership_length_months, mail_street, mail_city, mail_state, mail_zip,
-		       suggested_rent, median_income, flood_zone, hoa, tax_lien,
-		       tax_amount, tax_delinquent_year, years_owned, last_sale_date,
-		       raw_data, discovered_at, enriched_at, created_at, updated_at
+			ST_AsText(location) as location,
+			property_type, bedrooms, bathrooms, sqft, year_built, lot_sqft,
+			avm, assessed_value,
+			open_mortgage_balance, equity_amount, equity_percent, loan_type, lender_name,
+			pre_foreclosure, auction, auction_date, auction_time, auction_location,
+			notice_type, recording_date, foreclosure,
+			bank_estimated_value, trustee_name, trustee_phone, foreclosure_document_type,
+			owner1_first_name, owner1_last_name, owner1_full_name, owner1_type,
+			owner2_first_name, owner2_last_name,
+			owner_occupied, absentee_owner, investor_buyer, corporate_owned,
+			ownership_length_months, mail_street, mail_city, mail_state, mail_zip,
+			suggested_rent, median_income, flood_zone, hoa, tax_lien,
+			tax_amount, tax_delinquent_year, years_owned, last_sale_date,
+			skip_trace_status, skip_trace_attempted_at, skip_trace_error,
+			raw_data, discovered_at, enriched_at, created_at, updated_at
 		FROM properties
 		WHERE source = $1 AND source_id = $2
 	`
+
 	err := db.conn.QueryRow(query, source, sourceID).Scan(
 		&prop.ID, &prop.Source, &prop.SourceID, &prop.Address, &prop.Street, &prop.City,
 		&prop.State, &prop.Zip, &prop.County, &prop.FIPS, &prop.Location,
@@ -57,6 +59,7 @@ func (db *DB) GetPropertyBySourceID(source, sourceID string) (*domain.Property, 
 		&prop.OwnershipLengthMonths, &prop.MailStreet, &prop.MailCity, &prop.MailState, &prop.MailZip,
 		&prop.SuggestedRent, &prop.MedianIncome, &prop.FloodZone, &prop.HOA, &prop.TaxLien,
 		&prop.TaxAmount, &prop.TaxDelinquentYear, &prop.YearsOwned, &prop.LastSaleDate,
+		&prop.SkipTraceStatus, &prop.SkipTraceAttemptedAt, &prop.SkipTraceError,
 		&prop.RawData, &prop.DiscoveredAt, &prop.EnrichedAt, &prop.CreatedAt, &prop.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -73,20 +76,21 @@ func (db *DB) GetPropertyByID(id uuid.UUID) (*domain.Property, error) {
 	var prop domain.Property
 	query := `
 		SELECT id, source, source_id, address, street, city, state, zip, county, fips,
-		       ST_AsText(location) as location,
-		       property_type, bedrooms, bathrooms, sqft, year_built, lot_sqft,
-		       avm, assessed_value,
-		       open_mortgage_balance, equity_amount, equity_percent, loan_type, lender_name,
-		       pre_foreclosure, auction, auction_date, auction_time, auction_location,
-		       notice_type, recording_date, foreclosure,
-		       bank_estimated_value, trustee_name, trustee_phone, foreclosure_document_type,
-		       owner1_first_name, owner1_last_name, owner1_full_name, owner1_type,
-		       owner2_first_name, owner2_last_name,
-		       owner_occupied, absentee_owner, investor_buyer, corporate_owned,
-		       ownership_length_months, mail_street, mail_city, mail_state, mail_zip,
-		       suggested_rent, median_income, flood_zone, hoa, tax_lien,
-		       tax_amount, tax_delinquent_year, years_owned, last_sale_date,
-		       raw_data, discovered_at, enriched_at, created_at, updated_at
+			ST_AsText(location) as location,
+			property_type, bedrooms, bathrooms, sqft, year_built, lot_sqft,
+			avm, assessed_value,
+			open_mortgage_balance, equity_amount, equity_percent, loan_type, lender_name,
+			pre_foreclosure, auction, auction_date, auction_time, auction_location,
+			notice_type, recording_date, foreclosure,
+			bank_estimated_value, trustee_name, trustee_phone, foreclosure_document_type,
+			owner1_first_name, owner1_last_name, owner1_full_name, owner1_type,
+			owner2_first_name, owner2_last_name,
+			owner_occupied, absentee_owner, investor_buyer, corporate_owned,
+			ownership_length_months, mail_street, mail_city, mail_state, mail_zip,
+			suggested_rent, median_income, flood_zone, hoa, tax_lien,
+			tax_amount, tax_delinquent_year, years_owned, last_sale_date,
+			skip_trace_status, skip_trace_attempted_at, skip_trace_error,
+			raw_data, discovered_at, enriched_at, created_at, updated_at
 		FROM properties
 		WHERE id = $1
 	`
@@ -105,6 +109,7 @@ func (db *DB) GetPropertyByID(id uuid.UUID) (*domain.Property, error) {
 		&prop.OwnershipLengthMonths, &prop.MailStreet, &prop.MailCity, &prop.MailState, &prop.MailZip,
 		&prop.SuggestedRent, &prop.MedianIncome, &prop.FloodZone, &prop.HOA, &prop.TaxLien,
 		&prop.TaxAmount, &prop.TaxDelinquentYear, &prop.YearsOwned, &prop.LastSaleDate,
+		&prop.SkipTraceStatus, &prop.SkipTraceAttemptedAt, &prop.SkipTraceError,
 		&prop.RawData, &prop.DiscoveredAt, &prop.EnrichedAt, &prop.CreatedAt, &prop.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -243,6 +248,31 @@ func (db *DB) UpsertProperty(prop *domain.Property) error {
 
 	if err != nil {
 		return fmt.Errorf("failed to upsert property: %w", err)
+	}
+
+	return nil
+}
+
+// UpdatePropertySkipTraceStatus updates skip trace tracking fields
+func (db *DB) UpdatePropertySkipTraceStatus(propertyID uuid.UUID, status string, errorMsg string) error {
+	var errorMsgPtr *string
+	if errorMsg != "" {
+		errorMsgPtr = &errorMsg
+	}
+
+	query := `
+		UPDATE properties 
+		SET 
+			skip_trace_status = $1,
+			skip_trace_attempted_at = NOW(),
+			skip_trace_error = $2,
+			updated_at = NOW()
+		WHERE id = $3
+	`
+
+	_, err := db.conn.Exec(query, status, errorMsgPtr, propertyID)
+	if err != nil {
+		return fmt.Errorf("failed to update skip trace status: %w", err)
 	}
 
 	return nil

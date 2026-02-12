@@ -76,6 +76,11 @@ CREATE TABLE properties (
     years_owned INT,
     last_sale_date DATE,
 
+    -- Skip trace tracking (to avoid re-running the skip trace api)
+    skip_trace_status TEXT DEFAULT 'pending',
+    skip_trace_attempted_at TIMESTAMPTZ,
+    skip_trace_error TEXT,
+
     -- metadata
     raw_data JSONB,
     discovered_at TIMESTAMPTZ DEFAULT NOW(),

@@ -84,6 +84,11 @@ type Property struct {
 	YearsOwned        *int       `db:"years_owned"`
 	LastSaleDate      *time.Time `db:"last_sale_date"`
 
+	// Skip trace tracking
+	SkipTraceStatus      *string    `db:"skip_trace_status"`
+	SkipTraceAttemptedAt *time.Time `db:"skip_trace_attempted_at"`
+	SkipTraceError       *string    `db:"skip_trace_error"`
+
 	// Metadata
 	RawData      *string    `db:"raw_data"` // JSONB stored as string, parse as needed
 	DiscoveredAt time.Time  `db:"discovered_at"`
